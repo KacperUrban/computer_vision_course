@@ -2,32 +2,69 @@ import cv2
 import mediapipe as mp
 import os
 import numpy as np
+import argparse
 
-
-# read image
-img = cv2.imread(os.path.join('.', 'face.jpg'))
-img = cv2.resize(img, (800, 600))
-H, W, _ = img.shape
-
-# detect faces
-detector = mp.solutions.face_detection
-
-with detector.FaceDetection(model_selection=0, min_detection_confidence=0.5) as face_detector:
+def detect_faces(img: np.ndarray, face_detector: mp.solutions.face_detection.FaceDetection) -> None:
+    H, W, _ = img.shape
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     results = face_detector.process(img_rgb)
 
-    if results:
+    if results.detections:
         for detection in results.detections:
-            print(f"Score: {np.round(detection.score[0], 4) * 100}%")
             loc_data = detection.location_data.relative_bounding_box
-            x1, y1, w, h = int(loc_data.xmin * W), int(loc_data.ymin * H), int(loc_data.width * W), int(loc_data.height * H)
+            x1 = int(max(0, loc_data.xmin * W))
+            y1 = int(max(0, loc_data.ymin * H))
+            w = int(min(loc_data.width * W, W - x1))
+            h = int(min(loc_data.height * H, H - y1))
+
             x1_text = x1
-            y1_text = y1 - 10
+            y1_text = max(0, y1 - 10)
 
-            img = cv2.putText(img, f"Score: {np.round(detection.score[0], 4) * 100}%", (x1_text, y1_text), cv2.FONT_HERSHEY_SIMPLEX, 
-                              0.8, (0, 255, 0), 3)
-            img = cv2.rectangle(img, (x1, y1), (x1 + w, y1 + h), (0, 255, 0), 4)
-            img[y1:y1 + h, x1:x1 + w, :] = cv2.blur(img[y1:y1 + h, x1:x1 + w, :], (50, 50))
+            img = cv2.putText(img, f"Score: {np.round(detection.score[0], 2) * 100}%", 
+                              (x1_text, y1_text), cv2.FONT_HERSHEY_SIMPLEX, 
+                              0.65, (0, 255, 0), 3)
+            img = cv2.rectangle(img, (x1, y1), (x1 + w, y1 + h), (0, 255, 0), 6)
+            if h > 0 and w > 0:
+                img[y1:y1 + h, x1:x1 + w, :] = cv2.blur(img[y1:y1 + h, x1:x1 + w, :], (50, 50))
 
-cv2.imshow('image', img)
-cv2.waitKey(0)
+# parse arguments
+parser = argparse.ArgumentParser()
+
+parser.add_argument('--mode', default='image')
+parser.add_argument('--filepath', default=os.path.join('.', 'data', 'face.jpg'))
+
+args = parser.parse_args()
+
+# read image
+
+# detect faces
+if args.mode == 'image':
+    img = cv2.imread(args.filepath)
+    img = cv2.resize(img, (800, 600))
+
+    detector = mp.solutions.face_detection
+
+    with detector.FaceDetection(model_selection=0, min_detection_confidence=0.5) as face_detector:
+        detect_faces(img, face_detector)
+
+    cv2.imshow('image', img)
+    cv2.waitKey(0)
+
+elif args.mode == 'video':
+    pass
+elif args.mode == 'webcam':
+    video = cv2.VideoCapture(0)
+    detector = mp.solutions.face_detection
+
+    while True:
+        ret, frame = video.read()
+        if not ret:
+            break
+        with detector.FaceDetection(model_selection=0, min_detection_confidence=0.5) as face_detector:
+            detect_faces(frame, face_detector)
+
+        if cv2.waitKey(10) & 0xFF == ord('q'):
+            break
+        cv2.imshow('Webcam', frame)
+    video.release()
+    cv2.destroyAllWindows()
