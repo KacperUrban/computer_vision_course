@@ -35,9 +35,6 @@ parser.add_argument('--filepath', default=os.path.join('.', 'data', 'face.jpg'))
 
 args = parser.parse_args()
 
-# read image
-
-# detect faces
 if args.mode == 'image':
     img = cv2.imread(args.filepath)
     img = cv2.resize(img, (800, 600))
@@ -47,11 +44,44 @@ if args.mode == 'image':
     with detector.FaceDetection(model_selection=0, min_detection_confidence=0.5) as face_detector:
         detect_faces(img, face_detector)
 
-    cv2.imshow('image', img)
-    cv2.waitKey(0)
+    if not os.path.exists('./data/output'):
+        os.makedirs('./data/output')
+    cv2.imwrite('./data/output/img_blur.jpg', img)
 
 elif args.mode == 'video':
-    pass
+    detector = mp.solutions.face_detection
+    video = cv2.VideoCapture(args.filepath)
+
+    frame_width = int(video.get(3)) 
+    frame_height = int(video.get(4)) 
+   
+    size = (frame_width, frame_height) 
+
+    if not os.path.exists('./data/output'):
+        os.makedirs('./data/output')
+
+    result = cv2.VideoWriter('./data/ouput/filename.mp4',
+                         cv2.VideoWriter_fourcc(*'mp4v'), 
+                         10, size)
+    
+    while True:
+        ret, frame = video.read()
+
+        if not ret:
+            break
+        
+        with detector.FaceDetection(model_selection=0, min_detection_confidence=0.5) as face_detector:
+            detect_faces(frame, face_detector)
+        
+        result.write(frame)
+
+        if cv2.waitKey(10) & 0xFF == ord('s'): 
+            break
+    video.release()
+    result.release()
+
+    cv2.destroyAllWindows()
+
 elif args.mode == 'webcam':
     video = cv2.VideoCapture(0)
     detector = mp.solutions.face_detection
